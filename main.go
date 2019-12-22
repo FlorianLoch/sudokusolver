@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"strings"
 	"strconv"
+	"sync"
 )
 
 var exampleBoard = Board{5, 3, 0, 0, 7, 0, 0, 0, 0, 6, 0, 0, 1, 9, 5, 0, 0, 0, 0, 9, 8, 0, 0, 0, 0, 6, 0, 8, 0, 0, 0, 6, 0, 0, 0, 3, 4, 0, 0, 8, 0, 3, 0, 0, 1, 7, 0, 0, 0, 2, 0, 0, 0, 6, 0, 6, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 4, 1, 9, 0, 0, 5, 0, 0, 0, 0, 8, 0, 0, 7, 9}
 
 /*
+	This is a small, unsophisticated solver for sudoku puzzles. It uses a backtracking algorithm
+
 	Given situation:
 	5, 3, 0, 0, 7, 0, 0, 0, 0,
 	6, 0, 0, 1, 9, 5, 0, 0, 0,
@@ -32,10 +35,7 @@ var exampleBoard = Board{5, 3, 0, 0, 7, 0, 0, 0, 0, 6, 0, 0, 1, 9, 5, 0, 0, 0, 0
 	3, 4, 5, 2, 8, 6, 1, 7, 9
 */
 
-var (
-	blockOffsets = []int{0, 1, 2, 9, 10, 11, 18, 19, 20}
-	opsCnt = 0
-)
+var blockOffsets = []int{0, 1, 2, 9, 10, 11, 18, 19, 20}
 
 type Board []int
 
@@ -64,8 +64,6 @@ func (b Board) Get(x, y int) int {
 }
 
 func (b Board) valuePossibleAt(v, idx int) bool {
-	opsCnt++
-
 	// Check row
 	startOfRowIdx := idx / 9 * 9
 	for i := 0; i < 9; i++ {
@@ -111,24 +109,69 @@ func (b Board) String() string {
 	return sb.String()
 }
 
+func (b Board) findNextFieldNotSetAlready(idx int) int {
+	for idx < 81 && b[idx] != 0 {
+		idx = idx + 1
+	}
+
+	return idx
+}
+
 func (b Board) Solve() {
-	opsCnt = 0
 	fmt.Printf("Trying to find solution for: %s\n", b)
 
-	if b.solveInner(0) {
-		fmt.Printf("Found valid solution after %d steps: %s", opsCnt, b)
-	} else {
-		fmt.Printf("Could not find a valid solution for this puzzle after %d steps!\n", opsCnt)
+	idx := b.findNextFieldNotSetAlready(0)
+
+	if idx == 81 {
+		// All fields are set, we found a solution for this puzzle
+		fmt.Printf("All values in this board are set already: %s", b)
+		return
+	}
+
+	resultChan := make(chan Board, 9) // Probably there could be up to 9 valid solutions
+	doneChan := make(chan struct{})
+	var wg sync.WaitGroup
+
+	// Iterate over all possible values for this field
+	for i := 1; i < 10; i++ {
+		if b.valuePossibleAt(i, idx) {
+			copiedBoard := NewBoard()
+			copy(copiedBoard, b)
+
+			wg.Add(1)
+
+			go func (i, idx int) {
+				copiedBoard[idx] = i
+
+				if copiedBoard.solveInner(idx + 1) {
+					resultChan <- copiedBoard
+				} else {
+					// Only if we did not find a solution we count the WaitGroup down
+					// as pushing the board to the resultChan will already lead to termination
+					wg.Done()
+				}
+			}(i, idx)
+		}
+	}
+
+	// This is a helper construct to be able to use the select statement below
+	// by basically converting the WaitGroup into a Channel. This goroutine will not
+	// terminate in a case a valid solution is found.
+	go func() {
+		wg.Wait()
+		close(doneChan)
+	}()
+
+	select {
+	case result := <- resultChan:
+		fmt.Printf("Found valid solution: %s", result)
+	case <- doneChan:
+		fmt.Printf("Could not find a valid solution for this puzzle!\n")
 	}
 }
 
 func (b Board) solveInner(idx int) bool {
-	// fmt.Printf("%d: %s\n", idx, b)
-
-	// Find next field not being set already
-	for idx < 81 && b[idx] != 0 {
-		idx = idx + 1
-	}
+	idx = b.findNextFieldNotSetAlready(idx)
 
 	if idx == 81 {
 		// All fields are set, we found a solution for this puzzle
@@ -145,7 +188,7 @@ func (b Board) solveInner(idx int) bool {
 		}
 	}
 
-	// Reset field for backtracking
+	// Reset field for backtracking as the array is not copied
 	b[idx] = 0
 
 	return false

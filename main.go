@@ -10,7 +10,9 @@ import (
 var exampleBoard = Board{5, 3, 0, 0, 7, 0, 0, 0, 0, 6, 0, 0, 1, 9, 5, 0, 0, 0, 0, 9, 8, 0, 0, 0, 0, 6, 0, 8, 0, 0, 0, 6, 0, 0, 0, 3, 4, 0, 0, 8, 0, 3, 0, 0, 1, 7, 0, 0, 0, 2, 0, 0, 0, 6, 0, 6, 0, 0, 0, 0, 2, 8, 0, 0, 0, 0, 4, 1, 9, 0, 0, 5, 0, 0, 0, 0, 8, 0, 0, 7, 9}
 
 /*
-	This is a small, unsophisticated solver for sudoku puzzles. It uses a backtracking algorithm
+	This is a small, unsophisticated solver for sudoku puzzles. It uses a backtracking algorithm in up to
+	10 additional goroutines. As the problem of solving these puzzles, on average, does not seem to be too
+	expensive this probably does not make a big difference - but it's a nice exercise :D
 
 	Given situation:
 	5, 3, 0, 0, 7, 0, 0, 0, 0,
